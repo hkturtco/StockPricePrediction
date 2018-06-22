@@ -4,7 +4,7 @@ class Stock {
 		this.filepath = stockfile;
 		
 		console.log("Created a stock object with filepath "+ this.filepath);
-		this.tfTrainingNew();
+		this.tfTrainingLoad();
 
 	}
 
@@ -108,6 +108,11 @@ class Stock {
 		});
 	}
 
+
+	async tfTrainingLoad() {
+		const model = await tf.loadModel('https://photo.recognize.tech/tensorflow/my-model-1.json');
+	}
+
 	get data(){
 		return this.readFile().then((result) =>{
 			return result;
@@ -126,7 +131,7 @@ class Stock {
 				if(this.readyState === 4 && this.status === 200){
 					let data = this.responseText;
 					let dataSplitByLine = data.split("\n");
-					let tmpRawData = [];
+					let tmpRawData = {training: [], testing: []};
 					
 					for(let i=1; i < dataSplitByLine.length; i++){
 						let dataValues = dataSplitByLine[i].split(",");
@@ -135,13 +140,13 @@ class Stock {
 						if(dataValues.every((value) => value !== "null")){
 							tmpRawSubData.push(i);
 							tmpRawSubData.push(parseFloat(dataValues[1]));
-							tmpRawData.push(tmpRawSubData);
+							tmpRawData.training.push(tmpRawSubData);
 						}
 					}
 
-					self.rawData = tmpRawData;
+					self.rawData = tmpRawData.training;
 
-					resolve(tmpRawData);
+					resolve(tmpRawData.training);
 				}
 			}
 			xhttp.open("GET", this.filepath, true);
