@@ -9,7 +9,22 @@
 	<!--<script src="sketch.js"></script>-->
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<style>
-		#source {
+
+		#sourcerow{
+			display: flex;
+		}
+
+		#trainsource {
+			width: 90%;
+			height: 50%;
+			overflow: auto;
+			border: 1px solid #999;
+			border-radius: 10px;
+			padding: 10px;
+			word-wrap: break-word;
+		}
+
+		#testsource {
 			width: 90%;
 			height: 50%;
 			overflow: auto;
@@ -22,7 +37,10 @@
 </head> 
 <body>
 	<input id="file" type="file">
-	<p id="source"></p>
+	<div id="sourceRow">
+		<p id="trainsource"></p>
+		<p id="testsource"></p>
+	</div>
 	<div id="sourceGraph"></div>
 	<script src="stock.js"></script>
 </body>

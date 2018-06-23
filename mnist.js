@@ -1,4 +1,4 @@
-class Stock {
+class Mnist {
 
 	constructor(stockfile){
 		this.filepath = stockfile;
