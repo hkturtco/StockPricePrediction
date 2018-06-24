@@ -1,7 +1,7 @@
 class Mnist {
 
-	constructor(stockfile){
-		this.filepath = stockfile;
+	constructor(imgfile){
+		this.filepath = imgfile;
 		
 		console.log("Created a stock object with filepath "+ this.filepath);
 		this.tfTrainingNew();

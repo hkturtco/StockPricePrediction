@@ -8,104 +8,44 @@ class Stock {
 
 	}
 
-	tfTrainingOld() {
-		let self = this;
-		this.readFile().then((result) =>{
-
-			let n_stocks = self.rawData.training.length -1;
-			let n_neurons_1 = 1024;
-			let n_neurons_2 = 512;
-			let n_neurons_3 = 256;
-			let n_neurons_4 = 128;
-			let n_target = self.rawData.training.length -1;
-			let X = tf.tensor(self.rawData.training.slice(0,-2));
-			let Y = tf.tensor(self.rawData.training.slice(1, -1));
-			let W_hidden_1 = tf.variable(tf.truncatedNormal([n_stocks, n_neurons_1]));
-			let bias_hidden_1 = tf.variable(tf.zeros([n_neurons_1]));
-			let W_hidden_2 = tf.variable(tf.truncatedNormal([n_neurons_1, n_neurons_2]));
-			let bias_hidden_2 = tf.variable(tf.zeros([n_neurons_2]));
-			let W_hidden_3 = tf.variable(tf.truncatedNormal([n_neurons_2, n_neurons_3]));
-			let bias_hidden_3 = tf.variable(tf.zeros([n_neurons_3]));
-			let W_hidden_4 = tf.variable(tf.truncatedNormal([n_neurons_3, n_neurons_4]));
-			let bias_hidden_4 = tf.variable(tf.zeros([n_neurons_4]));
-			let W_out = tf.variable(tf.truncatedNormal([n_neurons_4, n_target]));
-			let bias_out = tf.variable(tf.zeros([n_target]));
-
-			const learningRate = 0.5;
-			const optimizer = tf.train.adamax(learningRate);
-
-			tf.tidy(function(){
-
-				let out = function(X) {
-					let hidden_1 = tf.relu(tf.add(tf.matMul(X, W_hidden_1, true), bias_hidden_1));
-					let hidden_2 = tf.relu(tf.add(tf.matMul(hidden_1, W_hidden_2), bias_hidden_2));
-					let hidden_3 = tf.relu(tf.add(tf.matMul(hidden_2, W_hidden_3), bias_hidden_3));
-					let hidden_4 = tf.relu(tf.add(tf.matMul(hidden_3, W_hidden_4), bias_hidden_4));
-				
-					return tf.transpose(tf.add(tf.matMul(hidden_4, W_out), bias_out));
-				}
-
-				console.log("Input:", X, " Output:", Y );
-				optimizer.minimize(()=> tf.losses.meanSquaredError(out(X), Y));
-			});
-		});
-	}
-
 	tfTrainingNew() {
 		let self = this;
 		this.readFile().then(async function(result){
 
-			let n_neurons_1 = 1024;
-			let n_neurons_2 = 512;
-			let n_neurons_3 = 256;
-			let n_neurons_4 = 128;  
 
-			let X = tf.tensor2d(self.rawData.training.slice(0,-1));
-			let Y = tf.tensor1d(self.rawData.training.slice(1).map((ele) => ele[1]));
+			let xInput = self.rawData.training.slice(0, -1);
+			let yInput = self.rawData.training.slice(1).map((ele) => ele[0][1]);
+			let X = tf.tensor3d(xInput);
+			let Y = tf.tensor1d(yInput);
 
 			const model = tf.sequential();
 
-			model.add(tf.layers.dense({
-				inputShape: [2],
-				activation: "relu",
-				units: n_neurons_1
-			}));
+			const lstm = tf.layers.lstm({units: 10});
+			const input = tf.input({shape: [1, 2]});
+			const output = lstm.apply(input);
 
-			model.add(tf.layers.dense({
-				inputShape: [n_neurons_1],
-				activation: "relu",
-				units: n_neurons_2
-			}));
+			const dense = tf.layers.dense({units: 1});
+			const activation = tf.layers.activation({activation: 'linear'});
 
-			model.add(tf.layers.dense({
-				inputShape: [n_neurons_2],
-				activation: "relu",
-				units: n_neurons_3
-			}));
 
-			model.add(tf.layers.dense({
-				inputShape: [n_neurons_3],
-				activation: "relu",
-				units: n_neurons_4
-			}));
-
-			model.add(tf.layers.dense({
-				inputShape: [n_neurons_4],
-				activation: "relu",
-				units: 1
-			}));
+			model.add(lstm);
+			model.add(dense);
+			model.add(activation);
 
 			model.compile({
 				loss: "meanSquaredError",
-				optimizer: tf.train.adamax(0.3)
+				optimizer: 'adam'
 			});
 
 			const startTime = Date.now();
-			model.fit(X, Y, {epochs: 10}).then((history) => {
+
+			model.fit(X, Y, {epochs: 5, batchSize: 1}).then((history) => {
+					
 					console.log("DONE!", Date.now() - startTime);
 					console.log(history);
-					let testingX = tf.tensor2d(self.rawData.testing);
-					model.predict(testingX).print();
+
+					let testingX = tf.tensor3d(self.rawData.training);
+					console.log(model.predict(testingX).dataSync());
 
 					let download = confirm("Download?");
 					if(download){
@@ -115,8 +55,7 @@ class Stock {
 		});
 	}
 
-
-	tfTrainingLoad() {
+	tfModelLoad() {
 		let self = this;
 
 		return this.readFile().then(async (result) => {
@@ -126,13 +65,7 @@ class Stock {
 			model.predict(testingX).print();
 
 		});
-	}
-
-	get data(){
-		return this.readFile().then((result) =>{
-			return result;
-		});
-	}
+	}	
 
 	readFile() {
 		let self = this;
@@ -160,9 +93,9 @@ class Stock {
 
 							// Saving data to training set and testing set respectively
 							if(i < 3458){
-								tmpRawData.training.push(tmpRawSubData);
+								tmpRawData.training.push([tmpRawSubData]);
 							} else {
-								tmpRawData.testing.push(tmpRawSubData);
+								tmpRawData.testing.push([tmpRawSubData]);
 							}
 
 							if(tmpRawSubData[1] > trainMax){
@@ -177,11 +110,11 @@ class Stock {
 
 					// Normalize the data
 					for(let i=0; i < tmpRawData.training.length; i++){
-						tmpRawData.training[i][1] = (tmpRawData.training[i][1] - trainMin) / (trainMax - trainMin);
+						tmpRawData.training[i][0][1] = (tmpRawData.training[i][0][1] - trainMin) / (trainMax - trainMin);
 					}
 
 					for(let i=0; i < tmpRawData.testing.length; i++){
-						tmpRawData.testing[i][1] = (tmpRawData.testing[i][1] - trainMin) / (trainMax - trainMin);
+						tmpRawData.testing[i][0][1] = (tmpRawData.testing[i][0][1] - trainMin) / (trainMax - trainMin);
 					}
 
 					self.rawData = tmpRawData;
@@ -192,6 +125,12 @@ class Stock {
 			xhttp.open("GET", this.filepath, true);
 			xhttp.send();
 
+		});
+	}
+
+	get data(){
+		return this.readFile().then((result) =>{
+			return result;
 		});
 	}
 }
@@ -210,11 +149,11 @@ stock.data.then((result) => {
 	htmlData += "Training Data <br>";
 
 	for(let ele of result.training){
-		trace.x.push(ele[0]);
-		trace.y.push(ele[1]);
-		htmlData += String(ele[0]);
+		trace.x.push(ele[0][0]);
+		trace.y.push(ele[0][1]);
+		htmlData += String(ele[0][0]);
 		htmlData += " : ";
-		htmlData += String(ele[1]);
+		htmlData += String(ele[0][1]);
 		htmlData += "<br>"; 
 	}
 
@@ -224,11 +163,11 @@ stock.data.then((result) => {
 	htmlData += "Testing Data <br>";
 
 	for(let ele of result.testing){
-		trace.x.push(ele[0]);
-		trace.y.push(ele[1]);
-		htmlData += String(ele[0]);
+		trace.x.push(ele[0][0]);
+		trace.y.push(ele[0][1]);
+		htmlData += String(ele[0][0]);
 		htmlData += " : ";
-		htmlData += String(ele[1]);
+		htmlData += String(ele[0][1]);
 		htmlData += "<br>"; 
 	}
 
