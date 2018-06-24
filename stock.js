@@ -4,54 +4,56 @@ class Stock {
 		this.filepath = stockfile;
 		
 		console.log("Created a stock object with filepath "+ this.filepath);
-		this.tfTrainingNew();
-
 	}
 
 	tfTrainingNew() {
 		let self = this;
-		this.readFile().then(async function(result){
+
+		return new Promise((resolve, reject) => {
+			self.readFile().then(async function(result){
 
 
-			let xInput = self.rawData.training.slice(0, -1);
-			let yInput = self.rawData.training.slice(1).map((ele) => ele[0][1]);
-			let X = tf.tensor3d(xInput);
-			let Y = tf.tensor1d(yInput);
+				let xInput = self.rawData.training.slice(0, -1).map((ele) => [[ele[0][1]]]);
+				let yInput = self.rawData.training.slice(1).map((ele) => ele[0][1]);
+				let X = tf.tensor3d(xInput);
+				let Y = tf.tensor1d(yInput);
 
-			const model = tf.sequential();
+				const model = tf.sequential();
 
-			const lstm = tf.layers.lstm({units: 10});
-			const input = tf.input({shape: [1, 2]});
-			const output = lstm.apply(input);
+				const lstm = tf.layers.lstm({units: 10});
+				const input = tf.input({shape: [1, 1]});
+				const output = lstm.apply(input);
 
-			const dense = tf.layers.dense({units: 1});
-			const activation = tf.layers.activation({activation: 'linear'});
+				const dense = tf.layers.dense({units: 1});
+				const activation = tf.layers.activation({activation: 'linear'});
 
 
-			model.add(lstm);
-			model.add(dense);
-			model.add(activation);
+				model.add(lstm);
+				model.add(dense);
+				model.add(activation);
 
-			model.compile({
-				loss: "meanSquaredError",
-				optimizer: 'adam'
-			});
+				model.compile({
+					loss: "meanSquaredError",
+					optimizer: 'adam'
+				});
 
-			const startTime = Date.now();
+				const startTime = Date.now();
 
-			model.fit(X, Y, {epochs: 5, batchSize: 1}).then((history) => {
-					
+				model.fit(X, Y, {epochs: 5, batchSize: 1}).then((history) => {
+						
 					console.log("DONE!", Date.now() - startTime);
 					console.log(history);
 
-					let testingX = tf.tensor3d(self.rawData.training);
-					console.log(model.predict(testingX).dataSync());
+					let testingX = tf.tensor3d(self.rawData.testing.map((ele) => [[ele[0][1]]]));
+					resolve(model.predict(testingX).dataSync());
 
 					let download = confirm("Download?");
 					if(download){
 						model.save('downloads://my-model-1');
 					}
 				});
+
+			});
 		});
 	}
 
@@ -92,7 +94,7 @@ class Stock {
 							tmpRawSubData.push(parseFloat(dataValues[1]));
 
 							// Saving data to training set and testing set respectively
-							if(i < 3458){
+							if(i < 3300){
 								tmpRawData.training.push([tmpRawSubData]);
 							} else {
 								tmpRawData.testing.push([tmpRawSubData]);
@@ -129,9 +131,10 @@ class Stock {
 	}
 
 	get data(){
-		return this.readFile().then((result) =>{
-			return result;
-		});
+		let readFile = this.readFile();
+		let trained = this.tfTrainingNew();
+
+		return Promise.all([readFile, trained]);
 	}
 }
 
@@ -144,11 +147,12 @@ stock.data.then((result) => {
 
 	// ==================== HTML Display =====================
 	let trace = { x: [], y: [], type: 'Scatter + Lines'};
-	
+	let resultTrace = { x: [], y: [], type: 'Scatter + Lines'};
+
 	let htmlData = "";
 	htmlData += "Training Data <br>";
 
-	for(let ele of result.training){
+	for(let ele of result[0].training){
 		trace.x.push(ele[0][0]);
 		trace.y.push(ele[0][1]);
 		htmlData += String(ele[0][0]);
@@ -162,19 +166,39 @@ stock.data.then((result) => {
 
 	htmlData += "Testing Data <br>";
 
-	for(let ele of result.testing){
+	let dayForResult = null;
+	let i = 0;
+
+	for(let ele of result[0].testing){
+
+		if(dayForResult === null){
+			firstDayForResult = Number(ele[0][0]);
+			dayForResult = firstDayForResult;
+		} else {
+			i = i + 1;
+			dayForResult = firstDayForResult + i;
+		}
 		trace.x.push(ele[0][0]);
 		trace.y.push(ele[0][1]);
+
+		resultTrace.x.push(dayForResult+1);
+		resultTrace.y.push(result[1][i]);
+
 		htmlData += String(ele[0][0]);
 		htmlData += " : ";
 		htmlData += String(ele[0][1]);
+		htmlData += " => ";
+		htmlData += String(dayForResult+1);
+		htmlData += " : ";
+		htmlData += String(result[1][i]);
 		htmlData += "<br>"; 
 	}
 
 	testSourceElement.innerHTML = htmlData;
+	console.log(resultTrace);
 
 	let layout = {xaxis:{zeroline: false}};
 
-	Plotly.newPlot("sourceGraph", [trace], layout);
+	Plotly.newPlot("sourceGraph", [trace, resultTrace], layout);
 
 });
